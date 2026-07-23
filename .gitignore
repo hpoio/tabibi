@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment variables (real secrets - never commit)
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+!**/.env.example
+
+# Next.js
+web/.next/
+web/out/
+
+# NestJS build
+backend/dist/
+
+# Flutter
+mobile/.dart_tool/
+mobile/build/
+
+# Backup files
+*.bak
+*.bak2
+*.bak3
+
+# OS/Editor
+.DS_Store
+Thumbs.db

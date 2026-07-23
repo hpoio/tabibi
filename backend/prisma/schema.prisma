@@ -1,0 +1,410 @@
+// ============================================================
+// مخطط قاعدة البيانات - تطبيق المساعد الطبي الذكي (الجزائر)
+// PostgreSQL + Prisma ORM
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------
+// قاعدة بيانات الأدوية (للاقتراح التلقائي أثناء كتابة الوصفة)
+// ------------------------------------------------------------
+model Drug {
+  id             String  @id @default(uuid())
+  tradeName      String // الاسم التجاري
+  scientificName String? // الاسم العلمي
+  form           String? // أقراص، شراب، حقن...
+  strength       String? // الجرعة القياسية، مثال: 500mg
+
+  @@index([tradeName])
+  @@map("drugs")
+}
+
+// ------------------------------------------------------------
+// الصلاحيات (RBAC)
+// ------------------------------------------------------------
+enum Role {
+  DOCTOR
+  SECRETARY
+  ASSISTANT
+  PATIENT
+  ADMIN
+}
+
+enum AppointmentType {
+  NEW_CONSULTATION // كشف جديد
+  FOLLOW_UP        // كونترول
+  LAB_TEST         // تحاليل
+  OTHER
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  DONE
+  CANCELLED
+  NO_SHOW
+}
+
+enum InvoiceStatus {
+  PAID
+  UNPAID
+  LATE
+}
+
+// ------------------------------------------------------------
+// المستخدمون (أساس مشترك: طبيب / سكرتير / مريض / أدمن)
+// ------------------------------------------------------------
+model User {
+  id           String   @id @default(uuid())
+  email        String?  @unique
+  phone        String   @unique
+  passwordHash String
+  role         Role
+  fullName     String
+  language     String   @default("ar") // ar | fr
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  doctorProfile    DoctorProfile?
+  secretaryProfile SecretaryProfile?
+  assistantProfile AssistantProfile?
+  patientProfile   PatientProfile?
+  auditLogs        AuditLog[]
+
+  @@map("users")
+}
+
+model DoctorProfile {
+  id             String  @id @default(uuid())
+  userId         String  @unique
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  specialty      String // عام / أطفال / قلب / نساء وتوليد ...
+  clinicName     String?
+  licenseNumber  String?
+  signatureUrl   String? // التوقيع الرقمي وختم الطبيب
+  region         String? // للدليل حسب المنطقة
+
+  patients       PatientProfile[]
+  appointments   Appointment[]
+  reports        MedicalReport[]
+  prescriptions  Prescription[]
+  consultationsAsked     Consultation[] @relation("ConsultationRequester")
+  consultationsAnswered  ConsultationReply[]
+  secretaries    SecretaryProfile[] @relation("DoctorSecretaries")
+  assistants     AssistantProfile[] @relation("DoctorAssistants")
+
+  @@map("doctor_profiles")
+}
+
+model SecretaryProfile {
+  id       String @id @default(uuid())
+  userId   String @unique
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  doctorId String
+  doctor   DoctorProfile @relation("DoctorSecretaries", fields: [doctorId], references: [id], onDelete: Cascade)
+
+  clinicName String?
+
+  @@map("secretary_profiles")
+}
+
+model AssistantProfile {
+  id       String @id @default(uuid())
+  userId   String @unique
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  doctorId String
+  doctor   DoctorProfile @relation("DoctorAssistants", fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@map("assistant_profiles")
+}
+
+// ------------------------------------------------------------
+// المريض
+// ------------------------------------------------------------
+model PatientProfile {
+  id             String   @id @default(uuid())
+  userId         String?  @unique // قد لا يملك حساب دخول بعد
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  primaryDoctorId String?
+  primaryDoctor   DoctorProfile? @relation(fields: [primaryDoctorId], references: [id])
+
+  fullName       String
+  birthDate      DateTime
+  gender         String // M | F
+  phone          String?
+  address        String?
+
+  qrCodeId       String   @unique @default(uuid()) // معرف مشفر داخل QR (لا بيانات طبية مباشرة)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  appointments    Appointment[]
+  medicalRecords  MedicalReport[]
+  prescriptions   Prescription[]
+  labResults      LabResult[]
+  vitalReadings   VitalReading[]
+  invoices        Invoice[]
+  chatMessages    AiChatMessage[]
+  notifications   Notification[]
+
+  @@map("patient_profiles")
+}
+
+// ------------------------------------------------------------
+// المواعيد
+// ------------------------------------------------------------
+model Appointment {
+  id          String            @id @default(uuid())
+  patientId   String
+  patient     PatientProfile    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId    String
+  doctor      DoctorProfile     @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  type        AppointmentType
+  status      AppointmentStatus @default(SCHEDULED)
+  scheduledAt DateTime
+  durationMin Int               @default(20)
+  notes       String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([doctorId, scheduledAt])
+  @@map("appointments")
+}
+
+// ------------------------------------------------------------
+// التقرير الطبي
+// ------------------------------------------------------------
+model MedicalReport {
+  id           String   @id @default(uuid())
+  patientId    String
+  patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId     String
+  doctor       DoctorProfile  @relation(fields: [doctorId], references: [id])
+
+  templateType String   // عام/أطفال/قلب/نساء وتوليد...
+  examination  String?
+  diagnosis    String?
+  recommendations String?
+  attachments  String[] // روابط صور/تحاليل مرفقة
+  pdfUrl       String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("medical_reports")
+}
+
+// ------------------------------------------------------------
+// الوصفات الطبية
+// ------------------------------------------------------------
+model Prescription {
+  id         String   @id @default(uuid())
+  patientId  String
+  patient    PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId   String
+  doctor     DoctorProfile  @relation(fields: [doctorId], references: [id])
+
+  items      PrescriptionItem[]
+  pdfUrl     String?
+  createdAt  DateTime @default(now())
+
+  @@map("prescriptions")
+}
+
+enum PrescriptionItemType {
+  DRUG
+  LAB_TEST
+}
+
+model PrescriptionItem {
+  id             String                @id @default(uuid())
+  prescriptionId String
+  prescription   Prescription          @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  type           PrescriptionItemType  @default(DRUG)
+  drugName       String // اسم تجاري، أو اسم التحليل إذا type = LAB_TEST
+  scientificName String?
+  dosage         String?
+  duration       String?
+  notes          String?
+
+  @@map("prescription_items")
+}
+
+// ------------------------------------------------------------
+// نتائج التحاليل
+// ------------------------------------------------------------
+model LabResult {
+  id           String   @id @default(uuid())
+  patientId    String
+  patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  testName     String
+  value        Float
+  unit         String
+  normalMin    Float?
+  normalMax    Float?
+  isAbnormal   Boolean  @default(false)
+  sourceFileUrl String? // صورة/ملف تم استيراده عبر OCR
+  takenAt      DateTime @default(now())
+
+  @@index([patientId, testName])
+  @@map("lab_results")
+}
+
+// ------------------------------------------------------------
+// المتابعة عن بعد (المؤشرات الحيوية)
+// ------------------------------------------------------------
+model VitalReading {
+  id         String   @id @default(uuid())
+  patientId  String
+  patient    PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  type       String   // ضغط | سكر | حرارة | وزن
+  value      Float
+  unit       String
+  recordedAt DateTime @default(now())
+  note       String?
+
+  @@index([patientId, type])
+  @@map("vital_readings")
+}
+
+// ------------------------------------------------------------
+// الفواتير
+// ------------------------------------------------------------
+model Invoice {
+  id         String        @id @default(uuid())
+  patientId  String
+  patient    PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  amount     Decimal       @db.Decimal(10, 2)
+  status     InvoiceStatus @default(UNPAID)
+  service    String
+  createdAt  DateTime      @default(now())
+  paidAt     DateTime?
+
+  @@map("invoices")
+}
+
+// ------------------------------------------------------------
+// الاستشارة بين الأطباء
+// ------------------------------------------------------------
+model Consultation {
+  id            String   @id @default(uuid())
+  requesterId   String
+  requester     DoctorProfile @relation("ConsultationRequester", fields: [requesterId], references: [id])
+  caseAnonymized Boolean @default(true)
+  caseText      String
+  createdAt     DateTime @default(now())
+
+  replies       ConsultationReply[]
+
+  @@map("consultations")
+}
+
+model ConsultationReply {
+  id             String       @id @default(uuid())
+  consultationId String
+  consultation   Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  doctorId       String
+  doctor         DoctorProfile @relation(fields: [doctorId], references: [id])
+  replyText      String
+  createdAt      DateTime     @default(now())
+
+  @@map("consultation_replies")
+}
+
+// ------------------------------------------------------------
+// المساعد الذكي للمرضى
+// ------------------------------------------------------------
+model AiChatMessage {
+  id         String   @id @default(uuid())
+  patientId  String
+  patient    PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  sender     String   // patient | ai | doctor
+  message    String
+  escalated  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@map("ai_chat_messages")
+}
+
+// ------------------------------------------------------------
+// الإشعارات
+// ------------------------------------------------------------
+model Notification {
+  id         String   @id @default(uuid())
+  patientId  String
+  patient    PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  type       String   // MED_REMINDER | APPOINTMENT_REMINDER | CHECK_IN
+  message    String
+  sentAt     DateTime?
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  @@map("notifications")
+}
+
+// ------------------------------------------------------------
+// سجل التدقيق (Audit Log)
+// ------------------------------------------------------------
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  action     String   // e.g. VIEW_PATIENT, EDIT_REPORT
+  entityType String
+  entityId   String
+
+  ipAddress  String?
+  userAgent  String?
+  oldValue   Json?
+  newValue   Json?
+
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+  
+enum StaffNotificationType {
+  APPOINTMENT_TODAY
+  APPOINTMENT_TOMORROW
+  APPOINTMENT_CANCELLED
+  INVOICE_UNPAID
+  BACKUP_SUCCESS
+  BACKUP_FAILURE
+}
+
+model StaffNotification {
+  id        String                @id @default(uuid())
+  doctorId  String
+  type      StaffNotificationType
+  title     String
+  message   String
+  relatedId String?
+  isRead    Boolean               @default(false)
+  readAt    DateTime?
+  createdAt DateTime              @default(now())
+
+  @@index([doctorId, isRead])
+  @@index([doctorId, createdAt])
+} 
