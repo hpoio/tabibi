@@ -1,16 +1,18 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { StaffResolverService, CurrentUserPayload } from '../common/services/staff-resolver.service';
 import { CreateLabResultDto } from './dto/lab-result.dto';
 
 @Injectable()
 export class LabResultsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private staffResolver: StaffResolverService,
+  ) {}
 
-  async create(doctorUserId: string, dto: CreateLabResultDto) {
-    await this.getDoctorProfile(doctorUserId);
-
-    const patient = await this.prisma.patientProfile.findUnique({ where: { id: dto.patientId } });
-    if (!patient) throw new NotFoundException('المريض غير موجود');
+  async create(user: CurrentUserPayload, dto: CreateLabResultDto) {
+    const doctorId = await this.staffResolver.resolveDoctorId(user);
+    await this.staffResolver.assertPatientOwnedByDoctor(doctorId, dto.patientId);
 
     // كشف تلقائي: القيمة غير طبيعية إذا خرجت عن المجال الطبيعي المُدخل
     const isAbnormal =
@@ -32,8 +34,10 @@ export class LabResultsService {
   }
 
   /** سجل كل التحاليل لمريض معيّن (يُستخدم أيضاً لرسم منحنى تطور القيمة عبر الزمن) */
-  async findByPatient(doctorUserId: string, patientId: string, testName?: string) {
-    await this.getDoctorProfile(doctorUserId);
+  async findByPatient(user: CurrentUserPayload, patientId: string, testName?: string) {
+    const doctorId = await this.staffResolver.resolveDoctorId(user);
+    await this.staffResolver.assertPatientOwnedByDoctor(doctorId, patientId);
+
     return this.prisma.labResult.findMany({
       where: { patientId, ...(testName ? { testName } : {}) },
       orderBy: { takenAt: 'asc' },
@@ -41,19 +45,13 @@ export class LabResultsService {
   }
 
   /** كل النتائج غير الطبيعية لدى مرضى هذا الطبيب - تُغذّي تنبيهات لوحة التحكم */
-  async findAbnormalForDoctor(doctorUserId: string) {
-    const doctorProfile = await this.getDoctorProfile(doctorUserId);
+  async findAbnormalForDoctor(user: CurrentUserPayload) {
+    const doctorId = await this.staffResolver.resolveDoctorId(user);
     return this.prisma.labResult.findMany({
-      where: { isAbnormal: true, patient: { primaryDoctorId: doctorProfile.id } },
+      where: { isAbnormal: true, patient: { primaryDoctorId: doctorId } },
       include: { patient: { select: { fullName: true } } },
       orderBy: { takenAt: 'desc' },
       take: 20,
     });
-  }
-
-  private async getDoctorProfile(userId: string) {
-    const profile = await this.prisma.doctorProfile.findUnique({ where: { userId } });
-    if (!profile) throw new ForbiddenException('هذا الحساب ليس حساب طبيب');
-    return profile;
   }
 }

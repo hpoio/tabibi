@@ -38,7 +38,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         },
       );
       final user = AppUser.fromJson(res['user']);
-      await SessionService.save(res['accessToken'], user);
+      await SessionService.save(res['accessToken'], res['refreshToken'], user);
 
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
@@ -86,7 +86,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.danger.withOpacity(0.06),
+                        color: AppColors.danger.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
@@ -110,8 +110,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: true,
-                    decoration: const InputDecoration(labelText: 'كلمة المرور (6 أحرف على الأقل)'),
-                    validator: (v) => (v == null || v.length < 6) ? '6 أحرف على الأقل' : null,
+                    decoration: const InputDecoration(labelText: 'كلمة المرور (8 أحرف على الأقل، حروف وأرقام)'),
+                    validator: (v) {
+                      if (v == null || v.length < 8) return '8 أحرف على الأقل';
+                      final hasLetter = RegExp(r'[A-Za-z\u0600-\u06FF]').hasMatch(v);
+                      final hasDigit = RegExp(r'\d').hasMatch(v);
+                      if (!hasLetter || !hasDigit) return 'يجب أن تحتوي على حروف وأرقام معاً';
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 20),
                   ElevatedButton(

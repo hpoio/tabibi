@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import '../../models/models.dart';
 import '../../services/api_client.dart';
 import '../../services/session_service.dart';
@@ -8,6 +8,8 @@ import '../auth/login_screen.dart';
 import '../chat/chat_screen.dart';
 import '../records/prescriptions_screen.dart';
 import '../records/lab_results_screen.dart';
+import '../qr/qr_scan_screen.dart';
+import '../ocr/ocr_upload_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -37,11 +39,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _user = await SessionService.getUser();
       final res = await ApiClient.get('/me/appointments');
       _appointments = (res as List).map((e) => AppointmentModel.fromJson(e)).toList();
+    } on SessionExpiredException {
+      _goToLogin();
+      return;
     } on ApiException catch (e) {
-      if (e.statusCode == 401) {
-        _goToLogin();
-        return;
-      }
       _error = e.message;
     } catch (_) {
       _error = 'تعذّر تحميل بياناتك. تأكد من اتصالك بالخادم.';
@@ -58,7 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _logout() async {
-    await SessionService.clear();
+    await ApiClient.logout();
     if (mounted) _goToLogin();
   }
 
@@ -87,7 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         padding: const EdgeInsets.all(12),
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: AppColors.danger.withOpacity(0.06),
+                          color: AppColors.danger.withValues(alpha: 0.06),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
@@ -102,11 +103,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             : Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
+                                  const Row(
                                     children: [
-                                      const Icon(Icons.calendar_today, color: AppColors.primary, size: 18),
-                                      const SizedBox(width: 8),
-                                      const Text('موعدك القادم', style: TextStyle(fontWeight: FontWeight.bold)),
+                                       Icon(Icons.calendar_today, color: AppColors.primary, size: 18),
+                                       SizedBox(width: 8),
+                                       Text('موعدك القادم', style: TextStyle(fontWeight: FontWeight.bold)),
                                     ],
                                   ),
                                   const SizedBox(height: 10),
@@ -151,7 +152,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           onTap: () => Navigator.of(context)
                               .push(MaterialPageRoute(builder: (_) => const LabResultsScreen())),
                         ),
-                        _QuickTile(icon: Icons.calendar_month_outlined, label: 'كل مواعيدي', onTap: () {}),
+                        _QuickTile(
+                          icon: Icons.qr_code_scanner,
+                          label: 'مسح رمز QR',
+                          onTap: () => Navigator.of(context)
+                              .push(MaterialPageRoute(builder: (_) => const QrScanScreen())),
+                        ),
+                        _QuickTile(
+                          icon: Icons.upload_file_outlined,
+                          label: 'رفع صورة تحليل',
+                          onTap: () => Navigator.of(context)
+                              .push(MaterialPageRoute(builder: (_) => const OcrUploadScreen())),
+                        ),
                       ],
                     ),
                   ],

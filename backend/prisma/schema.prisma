@@ -78,6 +78,7 @@ model User {
   assistantProfile AssistantProfile?
   patientProfile   PatientProfile?
   auditLogs        AuditLog[]
+  refreshTokens    RefreshToken[]
 
   @@map("users")
 }
@@ -95,11 +96,14 @@ model DoctorProfile {
   patients       PatientProfile[]
   appointments   Appointment[]
   reports        MedicalReport[]
+  labResultRequests LabResultRequest[]
   prescriptions  Prescription[]
   consultationsAsked     Consultation[] @relation("ConsultationRequester")
   consultationsAnswered  ConsultationReply[]
   secretaries    SecretaryProfile[] @relation("DoctorSecretaries")
   assistants     AssistantProfile[] @relation("DoctorAssistants")
+  sentMessages     DoctorMessage[] @relation("MessagesSent")
+  receivedMessages DoctorMessage[] @relation("MessagesReceived")
 
   @@map("doctor_profiles")
 }
@@ -157,6 +161,7 @@ model PatientProfile {
   vitalReadings   VitalReading[]
   invoices        Invoice[]
   chatMessages    AiChatMessage[]
+  labResultRequests LabResultRequest[]
   notifications   Notification[]
 
   @@map("patient_profiles")
@@ -231,12 +236,12 @@ enum PrescriptionItemType {
 }
 
 model PrescriptionItem {
-  id             String                @id @default(uuid())
+  id             String       @id @default(uuid())
   prescriptionId String
-  prescription   Prescription          @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
 
-  type           PrescriptionItemType  @default(DRUG)
-  drugName       String // اسم تجاري، أو اسم التحليل إذا type = LAB_TEST
+  type           PrescriptionItemType?
+  drugName       String // اسم تجاري
   scientificName String?
   dosage         String?
   duration       String?
@@ -384,7 +389,7 @@ model AuditLog {
   @@index([userId, createdAt])
   @@map("audit_logs")
 }
-  
+
 enum StaffNotificationType {
   APPOINTMENT_TODAY
   APPOINTMENT_TOMORROW
@@ -407,4 +412,62 @@ model StaffNotification {
 
   @@index([doctorId, isRead])
   @@index([doctorId, createdAt])
-} 
+}
+
+// ------------------------------------------------------------
+// رسائل مباشرة بين الأطباء
+// ------------------------------------------------------------
+model DoctorMessage {
+  id         String   @id @default(uuid())
+  senderId   String
+  sender     DoctorProfile @relation("MessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   DoctorProfile @relation("MessagesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  content    String
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([senderId, receiverId])
+  @@index([receiverId, readAt])
+  @@map("doctor_messages")
+}
+
+// RefreshTokens
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+enum LabResultRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model LabResultRequest {
+  id          String   @id @default(uuid())
+  patientId   String
+  patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId    String
+  doctor      DoctorProfile  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  rawText     String
+  suggestions Json
+  status      LabResultRequestStatus @default(PENDING)
+  reviewNote  String?
+  reviewedAt  DateTime?
+
+  createdAt   DateTime @default(now())
+
+  @@index([doctorId, status])
+  @@map("lab_result_requests")
+}

@@ -29,11 +29,13 @@ const TIMING_GROUPS: { key: string; label: string }[][] = [
     { key: "after_dinner", label: "بعد العشاء" },
   ],
 ];
-
-function emptyRow(): Row {
-  return { id: crypto.randomUUID(), itemType: "DRUG", drugName: "", timings: [], dosageNote: "", duration: "", notes: "" };
+function generateRowId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function emptyRow(): Row {
+  return { id: generateRowId(), itemType: "DRUG", drugName: "", timings: [], dosageNote: "", duration: "", notes: "" };
+}
 function buildDosage(row: Row): string {
   const timingLabels = TIMING_GROUPS.flat()
     .filter((t) => row.timings.includes(t.key))

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/models.dart';
 import '../../services/api_client.dart';
 import '../../theme/app_theme.dart';
+import '../auth/login_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -30,9 +31,19 @@ class _ChatScreenState extends State<ChatScreen> {
         _messages.addAll((res as List).map((e) => ChatMessageModel.fromJson(e)));
         _loadingHistory = false;
       });
+    } on SessionExpiredException {
+      _goToLogin();
     } catch (_) {
       setState(() => _loadingHistory = false);
     }
+  }
+
+  void _goToLogin() {
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
   }
 
   Future<void> _send() async {
@@ -55,6 +66,8 @@ class _ChatScreenState extends State<ChatScreen> {
           escalated: res['escalate'] ?? false,
         ));
       });
+    } on SessionExpiredException {
+      _goToLogin();
     } on ApiException catch (e) {
       setState(() {
         _messages.add(ChatMessageModel(sender: 'ai', message: 'خطأ: ${e.message}'));
@@ -154,7 +167,7 @@ class _MessageBubble extends StatelessWidget {
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
         decoration: BoxDecoration(
           color: message.escalated
-              ? AppColors.danger.withOpacity(0.08)
+              ? AppColors.danger.withValues(alpha: 0.08)
               : isPatient
                   ? AppColors.primary
                   : AppColors.accentSoft,

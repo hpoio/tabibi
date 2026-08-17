@@ -24,6 +24,8 @@ export class AiController {
   /** تشخيص مساعد - للطبيب فقط، لا يتصل به المريض أبداً */
   @Post('diagnosis-assist')
   @Roles(Role.DOCTOR)
+  // حماية تكلفة الـ API: كل استدعاء يستهلك رصيداً حقيقياً من Anthropic
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   diagnosisAssist(@Body() dto: DiagnosisAssistDto) {
     return this.aiService.getDiagnosisAssist(dto.caseText);
   }

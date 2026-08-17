@@ -119,6 +119,40 @@ export const appointmentTypeColor: Record<Appointment["type"], string> = {
   OTHER: "bg-border text-foreground",
 };
 
+export type LabResultRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export type OcrSuggestion = {
+  rawLine: string;
+  testNameGuess?: string;
+  valueGuess?: number;
+  unitGuess?: string;
+};
+
+export type LabResultRequest = {
+  id: string;
+  patientId: string;
+  doctorId: string;
+  rawText: string;
+  suggestions: OcrSuggestion[];
+  status: LabResultRequestStatus;
+  reviewNote?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  patient?: { fullName: string };
+};
+
+export const labResultRequestStatusLabel: Record<LabResultRequestStatus, string> = {
+  PENDING: "معلّق",
+  APPROVED: "موافَق عليه",
+  REJECTED: "مرفوض",
+};
+
+export const labResultRequestStatusColor: Record<LabResultRequestStatus, string> = {
+  PENDING: "bg-orange-500/10 text-orange-600",
+  APPROVED: "bg-success/10 text-success",
+  REJECTED: "bg-danger/10 text-danger",
+};
+
 export function calculateAge(birthDate: string): number {
   const diff = Date.now() - new Date(birthDate).getTime();
   return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));

@@ -18,7 +18,7 @@ export class LabResultsController {
   @Post()
   @Roles(Role.DOCTOR, Role.SECRETARY)
   create(@CurrentUser() user, @Body() dto: CreateLabResultDto) {
-    return this.service.create(user.userId, dto);
+    return this.service.create(user, dto);
   }
 
   @Get('patient/:patientId')
@@ -28,12 +28,12 @@ export class LabResultsController {
     @Param('patientId') patientId: string,
     @Query('testName') testName?: string,
   ) {
-    return this.service.findByPatient(user.userId, patientId, testName);
+    return this.service.findByPatient(user, patientId, testName);
   }
 
   @Get('abnormal')
   @Roles(Role.DOCTOR)
   abnormal(@CurrentUser() user) {
-    return this.service.findAbnormalForDoctor(user.userId);
+    return this.service.findAbnormalForDoctor(user);
   }
 }

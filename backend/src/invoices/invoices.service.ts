@@ -12,10 +12,8 @@ export class InvoicesService {
   ) {}
 
   async create(user: CurrentUserPayload, dto: CreateInvoiceDto) {
-    await this.staffResolver.resolveDoctorId(user);
-
-    const patient = await this.prisma.patientProfile.findUnique({ where: { id: dto.patientId } });
-    if (!patient) throw new NotFoundException('المريض غير موجود');
+    const doctorId = await this.staffResolver.resolveDoctorId(user);
+    await this.staffResolver.assertPatientOwnedByDoctor(doctorId, dto.patientId);
 
     return this.prisma.invoice.create({
       data: { patientId: dto.patientId, service: dto.service, amount: dto.amount },
@@ -23,7 +21,9 @@ export class InvoicesService {
   }
 
   async findByPatient(user: CurrentUserPayload, patientId: string) {
-    await this.staffResolver.resolveDoctorId(user);
+    const doctorId = await this.staffResolver.resolveDoctorId(user);
+    await this.staffResolver.assertPatientOwnedByDoctor(doctorId, patientId);
+
     return this.prisma.invoice.findMany({
       where: { patientId },
       orderBy: { createdAt: 'desc' },

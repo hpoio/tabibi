@@ -26,10 +26,13 @@ function toRows(items: PrescriptionItem[]): Row[] {
   }));
 }
 
-function emptyRow(): Row {
-  return { id: crypto.randomUUID(), itemType: "DRUG", drugName: "", dosage: "", duration: "", notes: "" };
+function generateRowId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function emptyRow(): Row {
+  return { id: generateRowId(), itemType: "DRUG", drugName: "", dosage: "", duration: "", notes: "" };
+}
 export function PrescriptionCard({
   prescription,
   onUpdated,

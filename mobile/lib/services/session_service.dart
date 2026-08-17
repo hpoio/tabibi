@@ -26,19 +26,38 @@ class AppUser {
 
 /// إدارة الجلسة محلياً عبر SharedPreferences (مناسب لتوكن JWT في تطبيق موبايل
 /// بسيط؛ للإنتاج الحقيقي يُفضَّل flutter_secure_storage للتخزين المشفّر).
+///
+/// ملاحظة مهمة: الخادم الآن يُصدر accessToken قصير العمر (ساعة واحدة) +
+/// refreshToken طويل العمر (30 يوماً) يُستخدم لتجديد الجلسة تلقائياً دون
+/// أن يُطلب من المستخدم تسجيل الدخول من جديد كل ساعة - راجع ApiClient.
 class SessionService {
   static const _tokenKey = 'access_token';
+  static const _refreshTokenKey = 'refresh_token';
   static const _userKey = 'current_user';
 
-  static Future<void> save(String token, AppUser user) async {
+  static Future<void> save(String accessToken, String refreshToken, AppUser user) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
+    await prefs.setString(_tokenKey, accessToken);
+    await prefs.setString(_refreshTokenKey, refreshToken);
     await prefs.setString(_userKey, jsonEncode(user.toJson()));
+  }
+
+  /// يُستدعى بعد نجاح تجديد الجلسة (POST /auth/refresh) لتحديث التوكنين فقط،
+  /// دون الحاجة لإعادة كتابة بيانات المستخدم.
+  static Future<void> updateTokens(String accessToken, String refreshToken) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_tokenKey, accessToken);
+    await prefs.setString(_refreshTokenKey, refreshToken);
   }
 
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_tokenKey);
+  }
+
+  static Future<String?> getRefreshToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_refreshTokenKey);
   }
 
   static Future<AppUser?> getUser() async {
@@ -51,6 +70,7 @@ class SessionService {
   static Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
+    await prefs.remove(_refreshTokenKey);
     await prefs.remove(_userKey);
   }
 }

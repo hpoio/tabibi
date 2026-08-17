@@ -15,6 +15,7 @@ import {
   Settings,
   UserPlus,
   History,
+  ScanLine,
   X,
 } from "lucide-react";
 import { getStoredUser, type StoredUser } from "@/lib/auth";
@@ -33,6 +34,7 @@ const navItems: NavItem[] = [
   { href: "/dashboard/appointments", label: "المواعيد", icon: CalendarDays, roles: ["DOCTOR", "SECRETARY"], color: "bg-success/15 text-success" },
   { href: "/dashboard/reports", label: "التقارير الطبية", icon: FileText, roles: ["DOCTOR"], color: "bg-primary/15 text-primary" },
   { href: "/dashboard/prescriptions", label: "الوصفات", icon: Pill, roles: ["DOCTOR"], color: "bg-accent/20 text-accent" },
+  { href: "/dashboard/lab-requests", label: "طلبات تحاليل المرضى", icon: ScanLine, roles: ["DOCTOR", "SECRETARY"], color: "bg-orange-500/15 text-orange-600" },
   // معطّلة - أصبحت التحاليل تُطلب كخيار داخل الوصفة
   // { href: "/dashboard/labs", label: "التحاليل", icon: FlaskConical, roles: ["DOCTOR"] },
   // معطّلة مؤقتاً - سيُعاد تفعيلها لاحقاً كإضافة

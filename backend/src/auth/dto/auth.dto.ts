@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { Role } from '@prisma/client';
 
 export class RegisterDto {
@@ -13,7 +13,11 @@ export class RegisterDto {
   email?: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(8, { message: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' })
+  @MaxLength(72, { message: 'كلمة المرور طويلة جداً' }) // bcrypt يتجاهل ما بعد 72 بايت
+  @Matches(/(?=.*[A-Za-z\u0600-\u06FF])(?=.*\d)/, {
+    message: 'كلمة المرور يجب أن تحتوي على حروف وأرقام معاً',
+  })
   password: string;
 
   @IsEnum(Role)
@@ -26,4 +30,9 @@ export class LoginDto {
 
   @IsString()
   password: string;
+}
+
+export class RefreshTokenDto {
+  @IsString()
+  refreshToken: string;
 }

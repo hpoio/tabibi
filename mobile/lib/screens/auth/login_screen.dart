@@ -33,7 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
         body: {'phone': _phoneController.text.trim(), 'password': _passwordController.text},
       );
       final user = AppUser.fromJson(res['user']);
-      await SessionService.save(res['accessToken'], user);
+      await SessionService.save(res['accessToken'], res['refreshToken'], user);
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
@@ -82,9 +82,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.danger.withOpacity(0.06),
+                          color: AppColors.danger.withValues(alpha: 0.06),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.danger.withOpacity(0.2)),
+                          border: Border.all(color: AppColors.danger.withValues(alpha: 0.2)),
                         ),
                         child: Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
                       ),

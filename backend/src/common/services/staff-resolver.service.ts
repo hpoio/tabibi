@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -38,5 +38,25 @@ export class StaffResolverService {
     }
 
     throw new ForbiddenException('هذا الدور لا يملك وصولاً لهذا المورد');
+  }
+
+  /**
+   * يتحقق أن المريض المطلوب هو فعلاً مريض هذا الطبيب (وليس مريض طبيب آخر).
+   * إلزامي قبل أي قراءة أو كتابة لبيانات طبية مرتبطة بمريض (وصفات، تحاليل،
+   * فواتير، تقارير) — بدونه أي طبيب مسجَّل في النظام يقدر يصل لبيانات
+   * مرضى طبيب آخر لمجرد معرفة أو تخمين الـ patientId (ثغرة IDOR).
+   *
+   * نستخدم NotFoundException (وليس ForbiddenException) عمداً: نفس رسالة
+   * الخطأ سواء كان المريض غير موجود أصلاً أو موجوداً عند طبيب آخر، حتى لا
+   * نؤكد لمهاجم محتمل أن الـ patientId الذي جرّبه صحيح فعلاً.
+   */
+  async assertPatientOwnedByDoctor(doctorId: string, patientId: string): Promise<void> {
+    const patient = await this.prisma.patientProfile.findFirst({
+      where: { id: patientId, primaryDoctorId: doctorId },
+      select: { id: true },
+    });
+    if (!patient) {
+      throw new NotFoundException('المريض غير موجود');
+    }
   }
 }

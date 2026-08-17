@@ -12,6 +12,7 @@ import { PdfModule } from './pdf/pdf.module';
 import { DrugsModule } from './drugs/drugs.module';
 import { PrescriptionsModule } from './prescriptions/prescriptions.module';
 import { LabResultsModule } from './lab-results/lab-results.module';
+import { LabResultRequestsModule } from './lab-result-requests/lab-result-requests.module';
 import { OcrModule } from './ocr/ocr.module';
 import { AiModule } from './ai/ai.module';
 import { InvoicesModule } from './invoices/invoices.module';
@@ -45,6 +46,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     DrugsModule,
     PrescriptionsModule,
     LabResultsModule,
+    LabResultRequestsModule,
     OcrModule,
     AiModule,
     InvoicesModule,

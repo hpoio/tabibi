@@ -1,9 +1,14 @@
 import { Injectable, ConflictException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
+
+// مدة صلاحية الـ Refresh Token (بالأيام) — أطول من الـ access token
+// لأنه هو المسؤول عن "تذكّرني" دون إعادة تسجيل الدخول كل مرة.
+const REFRESH_TOKEN_DAYS = 30;
 
 @Injectable()
 export class AuthService {
@@ -84,10 +89,68 @@ export class AuthService {
     return this.buildAuthResponse(user);
   }
 
-  private buildAuthResponse(user: { id: string; role: Role; fullName: string; phone: string }) {
+  /**
+   * يستبدل refresh token صالحاً بزوج جديد (access + refresh) ويُلغي القديم فوراً.
+   * هذا "التدوير" (rotation) يعني أن أي محاولة لإعادة استخدام توكن قديم مُستهلَك
+   * تفشل تلقائياً — وهي إشارة قوية على أن التوكن تسرّب واستُخدم من طرفين.
+   */
+  async refresh(rawRefreshToken: string) {
+    const tokenHash = this.hashToken(rawRefreshToken);
+    const stored = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
+
+    if (!stored || stored.revokedAt || stored.expiresAt < new Date() || !stored.user.isActive) {
+      throw new UnauthorizedException('جلسة غير صالحة، الرجاء تسجيل الدخول من جديد');
+    }
+
+    // إلغاء التوكن الحالي فوراً (تدوير إلزامي عند كل استخدام)
+    await this.prisma.refreshToken.update({
+      where: { id: stored.id },
+      data: { revokedAt: new Date() },
+    });
+
+    return this.buildAuthResponse(stored.user);
+  }
+
+  /** إلغاء refresh token واحد (تسجيل خروج من هذا الجهاز فقط) */
+  async logout(rawRefreshToken: string) {
+    const tokenHash = this.hashToken(rawRefreshToken);
+    await this.prisma.refreshToken.updateMany({
+      where: { tokenHash, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return { success: true };
+  }
+
+  /** إلغاء كل جلسات المستخدم على كل الأجهزة (عند تغيير كلمة المرور مثلاً، أو اشتباه اختراق) */
+  async logoutAllDevices(userId: string) {
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return { success: true };
+  }
+
+  private hashToken(rawToken: string): string {
+    return crypto.createHash('sha256').update(rawToken).digest('hex');
+  }
+
+  private async buildAuthResponse(user: { id: string; role: Role; fullName: string; phone: string }) {
     const payload = { sub: user.id, role: user.role, fullName: user.fullName };
+    const accessToken = this.jwt.sign(payload);
+
+    // Refresh token: سلسلة عشوائية مستقلة عن JWT، لا تُخزَّن أبداً بنص صريح في القاعدة
+    const rawRefreshToken = crypto.randomBytes(48).toString('hex');
+    const expiresAt = new Date(Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000);
+    await this.prisma.refreshToken.create({
+      data: { userId: user.id, tokenHash: this.hashToken(rawRefreshToken), expiresAt },
+    });
+
     return {
-      accessToken: this.jwt.sign(payload),
+      accessToken,
+      refreshToken: rawRefreshToken,
       user: {
         id: user.id,
         fullName: user.fullName,

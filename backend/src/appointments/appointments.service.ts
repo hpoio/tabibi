@@ -14,6 +14,7 @@ export class AppointmentsService {
 
   async create(user: CurrentUserPayload, dto: CreateAppointmentDto) {
     const doctorId = await this.staffResolver.resolveDoctorId(user);
+    await this.staffResolver.assertPatientOwnedByDoctor(doctorId, dto.patientId);
 
     return this.prisma.appointment.create({
       data: {

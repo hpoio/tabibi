@@ -19,25 +19,25 @@ export class PrescriptionsController {
   @Post()
   @Roles(Role.DOCTOR)
   create(@CurrentUser() user, @Body() dto: CreatePrescriptionDto) {
-    return this.service.create(user.userId, dto);
+    return this.service.create(user, dto);
   }
 
   @Get('patient/:patientId')
   @Roles(Role.DOCTOR)
   byPatient(@CurrentUser() user, @Param('patientId') patientId: string) {
-    return this.service.findByPatient(user.userId, patientId);
+    return this.service.findByPatient(user, patientId);
   }
 
   @Patch(':id')
   @Roles(Role.DOCTOR)
   update(@CurrentUser() user, @Param('id') id: string, @Body() dto: UpdatePrescriptionDto) {
-    return this.service.update(user.userId, id, dto);
+    return this.service.update(user, id, dto);
   }
 
   @Get(':id/pdf')
   @Roles(Role.DOCTOR)
   async pdf(@CurrentUser() user, @Param('id') id: string, @Res() res: Response) {
-    const buffer = await this.service.getPdf(user.userId, id);
+    const buffer = await this.service.getPdf(user, id);
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="prescription-${id}.pdf"`,

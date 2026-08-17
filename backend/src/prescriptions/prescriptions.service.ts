@@ -1,6 +1,7 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PdfService } from '../pdf/pdf.service';
+import { StaffResolverService, CurrentUserPayload } from '../common/services/staff-resolver.service';
 import { CreatePrescriptionDto, UpdatePrescriptionDto } from './dto/prescription.dto';
 
 @Injectable()
@@ -8,6 +9,7 @@ export class PrescriptionsService {
   constructor(
     private prisma: PrismaService,
     private pdfService: PdfService,
+    private staffResolver: StaffResolverService,
   ) {}
 
   /**
@@ -20,18 +22,14 @@ export class PrescriptionsService {
    * PostgreSQL (مثال: pg_dump مجدول، أو خدمة مُدارة كـ RDS/Supabase التي
    * توفر نسخاً احتياطية تلقائية جاهزة) — وليس كود تطبيق.
    */
-  async create(doctorUserId: string, dto: CreatePrescriptionDto) {
-    const doctorProfile = await this.getDoctorProfile(doctorUserId);
-
-    const patient = await this.prisma.patientProfile.findUnique({
-      where: { id: dto.patientId },
-    });
-    if (!patient) throw new NotFoundException('المريض غير موجود');
+  async create(user: CurrentUserPayload, dto: CreatePrescriptionDto) {
+    const doctorId = await this.staffResolver.resolveDoctorId(user);
+    await this.staffResolver.assertPatientOwnedByDoctor(doctorId, dto.patientId);
 
     const prescription = await this.prisma.prescription.create({
       data: {
         patientId: dto.patientId,
-        doctorId: doctorProfile.id,
+        doctorId,
         items: {
           create: dto.items.map((item) => ({
             drugName: item.drugName,
@@ -48,8 +46,10 @@ export class PrescriptionsService {
     return prescription;
   }
 
-  async findByPatient(doctorUserId: string, patientId: string) {
-    await this.getDoctorProfile(doctorUserId);
+  async findByPatient(user: CurrentUserPayload, patientId: string) {
+    const doctorId = await this.staffResolver.resolveDoctorId(user);
+    await this.staffResolver.assertPatientOwnedByDoctor(doctorId, patientId);
+
     return this.prisma.prescription.findMany({
       where: { patientId },
       include: { items: true },
@@ -61,11 +61,11 @@ export class PrescriptionsService {
    * تعديل وصفة موجودة: يستبدل كل عناصرها بالعناصر الجديدة المرسَلة.
    * أبسط وأضمن طريقة لتفادي تعقيد مطابقة كل عنصر قديم بعنصر جديد يدوياً.
    */
-  async update(doctorUserId: string, prescriptionId: string, dto: UpdatePrescriptionDto) {
-    const doctorProfile = await this.getDoctorProfile(doctorUserId);
+  async update(user: CurrentUserPayload, prescriptionId: string, dto: UpdatePrescriptionDto) {
+    const doctorId = await this.staffResolver.resolveDoctorId(user);
 
     const prescription = await this.prisma.prescription.findFirst({
-      where: { id: prescriptionId, doctorId: doctorProfile.id },
+      where: { id: prescriptionId, doctorId },
     });
     if (!prescription) throw new NotFoundException('الوصفة غير موجودة');
 
@@ -89,11 +89,13 @@ export class PrescriptionsService {
   }
 
   /** توليد وتنزيل PDF الوصفة عند الطلب (لا يُخزَّن تلقائياً في هذا الإصدار التجريبي) */
-  async getPdf(doctorUserId: string, prescriptionId: string): Promise<Buffer> {
-    const doctorProfile = await this.getDoctorProfile(doctorUserId);
+  async getPdf(user: CurrentUserPayload, prescriptionId: string): Promise<Buffer> {
+    const doctorId = await this.staffResolver.resolveDoctorId(user);
+    const doctorProfile = await this.prisma.doctorProfile.findUnique({ where: { id: doctorId } });
+    if (!doctorProfile) throw new NotFoundException('الطبيب غير موجود');
 
     const prescription = await this.prisma.prescription.findFirst({
-      where: { id: prescriptionId, doctorId: doctorProfile.id },
+      where: { id: prescriptionId, doctorId },
       include: {
         items: true,
         patient: true,
@@ -119,11 +121,5 @@ export class PrescriptionsService {
         notes: i.notes ?? undefined,
       })),
     });
-  }
-
-  private async getDoctorProfile(userId: string) {
-    const profile = await this.prisma.doctorProfile.findUnique({ where: { userId } });
-    if (!profile) throw new ForbiddenException('هذا الحساب ليس حساب طبيب');
-    return profile;
   }
 }

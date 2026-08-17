@@ -1,19 +1,24 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { StaffResolverService, CurrentUserPayload } from '../common/services/staff-resolver.service';
 import { CreateMedicalReportDto } from './dto/medical-report.dto';
 
 @Injectable()
 export class MedicalReportsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private staffResolver: StaffResolverService,
+  ) {}
 
-  async create(doctorUserId: string, dto: CreateMedicalReportDto) {
-    const doctorProfile = await this.getDoctorProfile(doctorUserId);
+  async create(user: CurrentUserPayload, dto: CreateMedicalReportDto) {
+    const doctorId = await this.staffResolver.resolveDoctorId(user);
+    await this.staffResolver.assertPatientOwnedByDoctor(doctorId, dto.patientId);
 
     // ملاحظة: توليد PDF فعلي (Puppeteer/WeasyPrint) وحفظه على S3 سيُضاف في المرحلة 2
     return this.prisma.medicalReport.create({
       data: {
         patientId: dto.patientId,
-        doctorId: doctorProfile.id,
+        doctorId,
         templateType: dto.templateType,
         examination: dto.examination,
         diagnosis: dto.diagnosis,
@@ -23,17 +28,13 @@ export class MedicalReportsService {
     });
   }
 
-  async findByPatient(doctorUserId: string, patientId: string) {
-    await this.getDoctorProfile(doctorUserId);
+  async findByPatient(user: CurrentUserPayload, patientId: string) {
+    const doctorId = await this.staffResolver.resolveDoctorId(user);
+    await this.staffResolver.assertPatientOwnedByDoctor(doctorId, patientId);
+
     return this.prisma.medicalReport.findMany({
       where: { patientId },
       orderBy: { createdAt: 'desc' },
     });
-  }
-
-  private async getDoctorProfile(userId: string) {
-    const profile = await this.prisma.doctorProfile.findUnique({ where: { userId } });
-    if (!profile) throw new ForbiddenException('هذا الحساب ليس حساب طبيب');
-    return profile;
   }
 }

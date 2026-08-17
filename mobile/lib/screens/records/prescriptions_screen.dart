@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import '../../models/models.dart';
 import '../../services/api_client.dart';
 import '../../theme/app_theme.dart';
+import '../auth/login_screen.dart';
 
 class PrescriptionsScreen extends StatefulWidget {
   const PrescriptionsScreen({super.key});
@@ -29,6 +30,13 @@ class _PrescriptionsScreenState extends State<PrescriptionsScreen> {
         _prescriptions = (res as List).map((e) => PrescriptionModel.fromJson(e)).toList();
         _loading = false;
       });
+    } on SessionExpiredException {
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+      }
     } on ApiException catch (e) {
       setState(() {
         _error = e.message;

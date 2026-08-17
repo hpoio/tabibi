@@ -18,12 +18,12 @@ export class MedicalReportsController {
   @Post()
   @Roles(Role.DOCTOR)
   create(@CurrentUser() user, @Body() dto: CreateMedicalReportDto) {
-    return this.service.create(user.userId, dto);
+    return this.service.create(user, dto);
   }
 
   @Get('patient/:patientId')
   @Roles(Role.DOCTOR)
   byPatient(@CurrentUser() user, @Param('patientId') patientId: string) {
-    return this.service.findByPatient(user.userId, patientId);
+    return this.service.findByPatient(user, patientId);
   }
 }

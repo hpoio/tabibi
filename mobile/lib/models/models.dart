@@ -91,6 +91,85 @@ class LabResultModel {
       );
 }
 
+class QrScanResultModel {
+  final String patientFirstName;
+  final List<PrescriptionItemModel> todayMedications;
+  final AppointmentModel? nextAppointment;
+
+  QrScanResultModel({
+    required this.patientFirstName,
+    required this.todayMedications,
+    this.nextAppointment,
+  });
+
+  factory QrScanResultModel.fromJson(Map<String, dynamic> json) => QrScanResultModel(
+        patientFirstName: json['patientFirstName'] ?? '',
+        todayMedications: (json['todayMedications'] as List? ?? [])
+            .map((e) => PrescriptionItemModel.fromJson(e))
+            .toList(),
+        nextAppointment:
+            json['nextAppointment'] != null ? AppointmentModel.fromJson(json['nextAppointment']) : null,
+      );
+}
+
+/// سطر اقتراح واحد من نتيجة OCR الخام - غير مؤكد بعد (raw من الخادم قبل
+/// أي مراجعة بشرية). يطابق ParsedLabLine في الباك-إند (ocr.service.ts).
+class OcrSuggestionModel {
+  final String rawLine;
+  final String? testNameGuess;
+  final double? valueGuess;
+  final String? unitGuess;
+
+  OcrSuggestionModel({required this.rawLine, this.testNameGuess, this.valueGuess, this.unitGuess});
+
+  factory OcrSuggestionModel.fromJson(Map<String, dynamic> json) => OcrSuggestionModel(
+        rawLine: json['rawLine'] ?? '',
+        testNameGuess: json['testNameGuess'],
+        valueGuess: json['valueGuess'] != null ? (json['valueGuess'] as num).toDouble() : null,
+        unitGuess: json['unitGuess'],
+      );
+}
+
+/// طلب مراجعة تحليل رفعه المريض بنفسه (صورة → OCR) بانتظار موافقة الطبيب.
+/// لا يظهر كـ LabResult حقيقي في "نتائج تحاليلي" إلا بعد أن يوافق الطبيب
+/// عليه صراحة (POST /lab-result-requests/:id/approve من جهة الطبيب).
+class LabResultRequestModel {
+  final String id;
+  final String status; // PENDING | APPROVED | REJECTED
+  final String rawText;
+  final List<OcrSuggestionModel> suggestions;
+  final String? reviewNote;
+  final DateTime createdAt;
+
+  LabResultRequestModel({
+    required this.id,
+    required this.status,
+    required this.rawText,
+    required this.suggestions,
+    this.reviewNote,
+    required this.createdAt,
+  });
+
+  factory LabResultRequestModel.fromJson(Map<String, dynamic> json) => LabResultRequestModel(
+        id: json['id'],
+        status: json['status'] ?? 'PENDING',
+        rawText: json['rawText'] ?? '',
+        suggestions: (json['suggestions'] as List? ?? [])
+            .map((e) => OcrSuggestionModel.fromJson(e))
+            .toList(),
+        reviewNote: json['reviewNote'],
+        createdAt: DateTime.parse(json['createdAt']),
+      );
+
+  static const Map<String, String> statusLabels = {
+    'PENDING': 'قيد المراجعة',
+    'APPROVED': 'تمت الموافقة',
+    'REJECTED': 'مرفوض',
+  };
+
+  String get statusLabel => statusLabels[status] ?? status;
+}
+
 class ChatMessageModel {
   final String sender; // patient | ai
   final String message;

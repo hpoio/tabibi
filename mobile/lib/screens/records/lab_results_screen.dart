@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import '../../models/models.dart';
 import '../../services/api_client.dart';
 import '../../theme/app_theme.dart';
+import '../auth/login_screen.dart';
 
 class LabResultsScreen extends StatefulWidget {
   const LabResultsScreen({super.key});
@@ -29,6 +30,13 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
         _results = (res as List).map((e) => LabResultModel.fromJson(e)).toList();
         _loading = false;
       });
+    } on SessionExpiredException {
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+      }
     } on ApiException catch (e) {
       setState(() {
         _error = e.message;
@@ -63,10 +71,10 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                               final r = _results[i];
                               return Card(
                                 margin: const EdgeInsets.only(bottom: 10),
-                                color: r.isAbnormal ? AppColors.danger.withOpacity(0.04) : null,
+                                color: r.isAbnormal ? AppColors.danger.withValues(alpha: 0.04) : null,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
-                                  side: BorderSide(color: r.isAbnormal ? AppColors.danger.withOpacity(0.3) : AppColors.border),
+                                  side: BorderSide(color: r.isAbnormal ? AppColors.danger.withValues(alpha: 0.3) : AppColors.border),
                                 ),
                                 child: ListTile(
                                   title: Text(r.testName),

@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { StaffResolverService, CurrentUserPayload } from '../common/services/staff-resolver.service';
 
@@ -36,8 +37,18 @@ export class SettingsService {
    * حذف كل بيانات مرضى هذا الطبيب (مواعيد، وصفات، تقارير، تحاليل، فواتير)
    * عبر حذف ملفات المرضى أنفسهم (Cascade في قاعدة البيانات يتكفّل بالباقي).
    * لا يمس حساب الطبيب ولا حسابات موظفيه.
+   *
+   * إجراء لا رجعة فيه (irreversible) على كامل الأرشيف الطبي — لهذا يُطلب
+   * إعادة إدخال كلمة المرور الحالية قبل التنفيذ. هذا يحمي من: توكن مسروق/
+   * منسي على جهاز مفتوح، نقرة خاطئة، أو استدعاء آلي غير مقصود للـ API.
    */
-  async wipeAllPatientData(user: CurrentUserPayload) {
+  async wipeAllPatientData(user: CurrentUserPayload, password: string) {
+    const account = await this.prisma.user.findUnique({ where: { id: user.userId } });
+    const passwordOk = account && (await bcrypt.compare(password, account.passwordHash));
+    if (!passwordOk) {
+      throw new UnauthorizedException('كلمة المرور غير صحيحة');
+    }
+
     const doctorId = await this.staffResolver.resolveDoctorId(user);
 
     const deleted = await this.prisma.patientProfile.deleteMany({
