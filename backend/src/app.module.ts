@@ -24,6 +24,7 @@ import { SettingsModule } from './settings/settings.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
+import { DoctorMessagesModule } from './doctor-messages/doctor-messages.module';
 import { AuditLogService } from './common/services/audit-log.service';
 import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -56,6 +57,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     StaffModule,
     SettingsModule,
     AuditLogsModule,
+    DoctorMessagesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
