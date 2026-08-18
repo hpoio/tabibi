@@ -29,3 +29,5 @@ mobile/build/
 # OS/Editor
 .DS_Store
 Thumbs.db
+
+*.pem
