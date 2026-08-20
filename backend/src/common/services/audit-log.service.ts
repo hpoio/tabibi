@@ -47,11 +47,36 @@ export class AuditLogService {
     }
   }
 
+  /**
+   * يحدد كل حسابات المستخدمين (User.id) التابعة لفريق عيادة هذا الطبيب:
+   * الطبيب نفسه + كل سكرتيراته + كل مساعديه. إلزامي لعزل الـ Tenant في
+   * سجل العمليات (Audit Log) — بدونه أي طبيب يقدر يقرأ سجل عمليات كل
+   * الأطباء الآخرين في النظام (SEC-012 / يتقاطع مع SEC-004).
+   */
+  private async resolveTeamUserIds(doctorUserId: string): Promise<string[]> {
+    const doctorProfile = await this.prisma.doctorProfile.findUnique({
+      where: { userId: doctorUserId },
+      select: {
+        userId: true,
+        secretaries: { select: { userId: true } },
+        assistants: { select: { userId: true } },
+      },
+    });
+    if (!doctorProfile) return [doctorUserId];
+
+    return [
+      doctorProfile.userId,
+      ...doctorProfile.secretaries.map((s) => s.userId),
+      ...doctorProfile.assistants.map((a) => a.userId),
+    ];
+  }
+
   async findMany(doctorUserId: string, query: AuditLogQuery) {
     const page = query.page && query.page > 0 ? query.page : 1;
     const pageSize = query.pageSize && query.pageSize > 0 ? query.pageSize : 20;
 
-    const where: any = {};
+    const teamUserIds = await this.resolveTeamUserIds(doctorUserId);
+    const where: any = { userId: { in: teamUserIds } };
 
     if (query.search) {
       where.OR = [

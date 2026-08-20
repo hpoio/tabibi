@@ -33,16 +33,14 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    // للمريض: إن كان الطبيب قد سجّله سابقاً (بنفس رقم الهاتف) نربط الحساب
-    // الجديد بملفه الطبي الموجود، بدل إنشاء ملف مكرّر بلا سجل طبي.
-    let linkedPatientProfileId: string | undefined;
-    if (dto.role === Role.PATIENT) {
-      const existingProfile = await this.prisma.patientProfile.findFirst({
-        where: { phone: dto.phone, userId: null },
-      });
-      linkedPatientProfileId = existingProfile?.id;
-    }
-
+    // ⚠️ أمان (SEC-014): سابقاً كان يُربط الحساب الجديد تلقائياً بأي
+    // PatientProfile موجود بنفس رقم الهاتف (سجّله طبيب سابقاً) بدون أي
+    // تحقق ملكية - هذا كان يسمح لأي شخص يعرف رقم هاتف مريض بانتحال هويته
+    // والوصول الفوري لكامل سجله الطبي (مواعيد، وصفات، تحاليل، فواتير).
+    // تم تعطيل الربط التلقائي: كل تسجيل مريض جديد ينشئ ملفاً مستقلاً.
+    // ربط حساب مريض موجود مسبقاً بملفه الطبي القديم يجب أن يمر عبر تحقق
+    // هوية فعلي (مثال: OTP عبر SMS أو تأكيد من الطبيب) - ميزة لاحقة مخطط
+    // لها، وليست جزءاً من هذا الإصلاح الأمني الحد الأدنى.
     const user = await this.prisma.user.create({
       data: {
         fullName: dto.fullName,
@@ -57,16 +55,14 @@ export class AuthService {
             : undefined,
         patientProfile:
           dto.role === Role.PATIENT
-            ? linkedPatientProfileId
-              ? { connect: { id: linkedPatientProfileId } }
-              : {
-                  create: {
-                    fullName: dto.fullName,
-                    birthDate: new Date('2000-01-01'), // يُطلب تحديثه لاحقاً من الملف الشخصي
-                    gender: 'F',
-                    phone: dto.phone,
-                  },
-                }
+            ? {
+                create: {
+                  fullName: dto.fullName,
+                  birthDate: new Date('2000-01-01'), // يُطلب تحديثه لاحقاً من الملف الشخصي
+                  gender: 'F',
+                  phone: dto.phone,
+                },
+              }
             : undefined,
       },
       include: { doctorProfile: true, patientProfile: true },

@@ -7,6 +7,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { StaffResolverService } from '../common/services/staff-resolver.service';
 import { AiService } from './ai.service';
 import { DiagnosisAssistDto, PatientChatDto } from './dto/ai.dto';
 import { containsEmergencyKeyword, EMERGENCY_RESPONSE_AR } from './emergency-keywords';
@@ -19,6 +20,7 @@ export class AiController {
   constructor(
     private aiService: AiService,
     private prisma: PrismaService,
+    private staffResolver: StaffResolverService,
   ) {}
 
   /** تشخيص مساعد - للطبيب فقط، لا يتصل به المريض أبداً */
@@ -51,6 +53,15 @@ export class AiController {
     }
     if (!patientId) {
       throw new BadRequestException('patientId مطلوب عند الاستدعاء نيابة عن مريض');
+    }
+
+    // أمان (SEC-011): إن كان المتصل طبيباً، يجب التحقق أن المريض المطلوب هو
+    // فعلاً مريض هذا الطبيب - وإلا يقدر أي طبيب يكتب/يقرأ في شات مريض
+    // تابع لطبيب آخر بمجرد تمرير patientId (IDOR). نفس النمط المستخدم في
+    // كل الوحدات الأخرى (prescriptions, lab-results, invoices...).
+    if (user.role === Role.DOCTOR) {
+      const doctorId = await this.staffResolver.resolveDoctorId(user);
+      await this.staffResolver.assertPatientOwnedByDoctor(doctorId, patientId);
     }
 
     const patient = await this.prisma.patientProfile.findUnique({
