@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StaffResolverService, CurrentUserPayload } from '../common/services/staff-resolver.service';
@@ -54,8 +54,18 @@ export class AppointmentsService {
   async update(user: CurrentUserPayload, appointmentId: string, dto: UpdateAppointmentDto) {
     const doctorId = await this.staffResolver.resolveDoctorId(user);
 
-    const appointment = await this.prisma.appointment.update({
+    // أمان (SEC-016): كان الاعتماد سابقاً فقط على where المركّب
+    // {id, doctorId} في update() مباشرة - العزل الأمني كان يعمل فعلياً
+    // (Prisma يرفض التحديث إن لم يتطابق doctorId)، لكن الخطأ الناتج
+    // (PrismaClientKnownRequestError P2025) لم يكن مُعالَجاً، فيسقط
+    // كخطأ عام 500 بدل رسالة نظيفة 404 - نفس نمط invoices.service.ts.
+    const existing = await this.prisma.appointment.findFirst({
       where: { id: appointmentId, doctorId },
+    });
+    if (!existing) throw new NotFoundException('الموعد غير موجود');
+
+    const appointment = await this.prisma.appointment.update({
+      where: { id: appointmentId },
       data: {
         ...(dto.status ? { status: dto.status } : {}),
         ...(dto.scheduledAt ? { scheduledAt: new Date(dto.scheduledAt) } : {}),

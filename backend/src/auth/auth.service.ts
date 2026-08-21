@@ -20,9 +20,16 @@ export class AuthService {
   async register(dto: RegisterDto) {
     // حسابات السكرتيرة والمساعد تُنشأ حصراً من طرف الطبيب (عبر /staff)
     // لأنها مرتبطة إلزامياً بطبيب محدد، وليس عبر التسجيل العام.
-    if (dto.role === Role.SECRETARY || dto.role === Role.ASSISTANT) {
+    //
+    // أمان (SEC-015): ADMIN يجب ألا يكون قابلاً للتسجيل العلني إطلاقاً -
+    // هذا الدور مخصص حصراً لحسابات تُنشأ يدوياً من طرف فريق Tabibi (seed
+    // script / وصول مباشر لقاعدة البيانات). قبل هذا الإصلاح كان أي شخص
+    // يقدر يسجّل حساب role=ADMIN مباشرة عبر /auth/register - لا يوجد حالياً
+    // أي endpoint يتحقق من Role.ADMIN، لكن هذا الإصلاح يمنع الثغرة قبل أي
+    // ميزة إدارية مستقبلية (privilege escalation كامن).
+    if (dto.role === Role.SECRETARY || dto.role === Role.ASSISTANT || dto.role === Role.ADMIN) {
       throw new BadRequestException(
-        'حسابات السكرتيرة والمساعد تُنشأ فقط من طرف الطبيب داخل لوحة التحكم',
+        'هذا النوع من الحسابات لا يُنشأ عبر التسجيل العام',
       );
     }
 
